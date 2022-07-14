@@ -8,24 +8,14 @@ namespace csharp_biblioteca
 {
     internal class Book : Document
     {
-        public string Isbn
-        {
-            get
-            {
-                return base.id;
-            }
-            set
-            {
-                base.id = value;
-            }
-        }
-
+        public string isbn;
         public int numberPages;
 
         //costruttore
-        public Book(string isbn, string type, string title, int year, string sector, bool state, string shelf, string author, int numberPages) :
-            base(isbn, type, title, year, sector, state, shelf, author)
+        public Book(int id, string isbn, string type, string title, int year, string sector, bool state, string shelf, string author, int numberPages) :
+            base(id, type, title, year, sector, state, shelf, author)
         {
+            this.isbn = isbn;
             this.numberPages = numberPages;
         }
 

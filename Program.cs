@@ -28,11 +28,7 @@
 
 using csharp_biblioteca;
 
-//creazioni liste
-List<Book> books = new List<Book>();
-List<Rental> rentals = new List<Rental>();
 
-
-Library library = new Library(books, rentals);
+Library library = new Library();
 
 library.Home(" MENÙ");

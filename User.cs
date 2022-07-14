@@ -8,6 +8,7 @@ namespace csharp_biblioteca
 {
     internal class User
     {
+        public int Id { get; private set; }
         public string name;
         public string surname;
         public string email;
@@ -18,8 +19,9 @@ namespace csharp_biblioteca
         public List<Rental> rentalUser = new List<Rental>();
 
         //costruttore
-        public User(string name, string surname, string email, string password, string cellNumber, bool register = false)
+        public User(int id, string name, string surname, string email, string password, string cellNumber, bool register = false)
         {
+            this.Id = id;
             this.name = name;
             this.surname = surname;
             this.email = email;

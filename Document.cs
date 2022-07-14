@@ -8,7 +8,7 @@ namespace csharp_biblioteca
 {
     internal class Document
     {
-        public string id;
+        public int id;
         public string type;
         public string title;
         public int year;
@@ -18,7 +18,7 @@ namespace csharp_biblioteca
         public string author;
 
         //costruttore
-        public Document(string id, string type, string title, int year, string sector, bool state, string shelf, string author)
+        public Document(int id, string type, string title, int year, string sector, bool state, string shelf, string author)
         {
             this.id = id;
             this.type = type;

@@ -9,22 +9,18 @@ namespace csharp_biblioteca
 {
     internal class Library
     {
-        public List<Book> books;
-        public List<Rental> rentals;
+    
 
         private bool isLog = false;
-        private int idUser;
         private User userLog;
-        private Book bookSearch;
+        private Book bookSelect;
 
         //db
         string stringaDiConnessione = "Data Source=localhost;Initial Catalog=db-biblioteca;Integrated Security=True";
 
         //costruttore
-        public Library(List<Book> books, List<Rental>rentals)
+        public Library()
         {
-            this.books = books;
-            this.rentals = rentals;
         }
 
 
@@ -107,6 +103,7 @@ namespace csharp_biblioteca
                             trans.Rollback();
                         }
                     }
+                    conn.Close();
                 }
                 catch(Exception ex)
                 {
@@ -153,14 +150,14 @@ namespace csharp_biblioteca
                                 {
                                     this.isLog = true;
 
-                                    this.idUser = reader.GetInt32(0);
+                                    int idUser = reader.GetInt32(0);
                                     string name = reader.GetString(1);
                                     string surname = reader.GetString(2);
                                     
                                     string cellNumber = reader.GetString(5);
                                     bool register = reader.GetBoolean(6);
 
-                                    this.userLog = new User(name, surname, email, password, cellNumber, register);
+                                    this.userLog = new User(idUser, name, surname, email, password, cellNumber, register);
                                 }
                             }
                             catch (Exception ex)
@@ -169,6 +166,7 @@ namespace csharp_biblioteca
                             }
                         }
                     }
+                    conn.Close();
                 }
                 catch (Exception ex)
                 {
@@ -215,11 +213,11 @@ namespace csharp_biblioteca
                     this.allBooks();
                     break;
                 case 3:
-                    this.RentalList(this.idUser);
+                    this.RentalList();
                     break;
                 case 4:
                     this.isLog = false;
-                    this.idUser = -1;
+                    this.userLog = null;
                     this.Home(" MENÙ");
                     break;
                 case 5:
@@ -259,7 +257,7 @@ namespace csharp_biblioteca
                     break;
                 case 4:
                     this.isLog = false;
-                    this.idUser = -1;
+                    this.userLog = null;
                     this.Home(" MENÙ");
                     break;
                 case 5:
@@ -299,6 +297,7 @@ namespace csharp_biblioteca
                             {
                                 foundBook = true;
 
+                                int id = reader.GetInt32(0);
                                 isbn = reader.GetString(1);
                                 string title = reader.GetString(2);
                                 string author = reader.GetString(3);
@@ -308,11 +307,12 @@ namespace csharp_biblioteca
                                 string shelf = reader.GetString(7);
                                 bool state = reader.GetBoolean(8);
 
-                                this.bookSearch = new Book(isbn, "book", title, year, genre, state, shelf, author, numberPages);
+                                this.bookSelect = new Book(id, isbn, "book", title, year, genre, state, shelf, author, numberPages);
 
                             }
                         }
                     }
+                    conn.Close();
                 }
                 catch (Exception ex)
                 {
@@ -323,7 +323,7 @@ namespace csharp_biblioteca
             if (foundBook)
             {
                 Console.Clear();
-                this.BookInfo(this.bookSearch);
+                this.BookInfo(this.bookSelect);
             }
             else
             {
@@ -366,6 +366,7 @@ namespace csharp_biblioteca
                             {
                                 foundBook = true;
 
+                                int id = reader.GetInt32(0);
                                 string isbn = reader.GetString(1);
                                 title = reader.GetString(2);
                                 string author = reader.GetString(3);
@@ -375,11 +376,12 @@ namespace csharp_biblioteca
                                 string shelf = reader.GetString(7);
                                 bool state = reader.GetBoolean(8);
 
-                                this.bookSearch = new Book(isbn, "book", title, year, genre, state, shelf, author, numberPages);
+                                this.bookSelect = new Book(id, isbn, "book", title, year, genre, state, shelf, author, numberPages);
 
                             }
                         }
                     }
+                    conn.Close();
                 }
                 catch (Exception ex)
                 {
@@ -390,7 +392,7 @@ namespace csharp_biblioteca
             if (foundBook)
             {
                 Console.Clear();
-                this.BookInfo(this.bookSearch);
+                this.BookInfo(this.bookSelect);
             }
             else
             {
@@ -440,7 +442,7 @@ namespace csharp_biblioteca
                     break;
                 case 5:
                     this.isLog = false;
-                    this.idUser = -1;
+                    this.userLog = null;
                     this.Home(" MENÙ");
                     break;
                 case 6:
@@ -460,17 +462,50 @@ namespace csharp_biblioteca
                 Console.WriteLine("------------------------------\n");
 
                 Console.WriteLine("Noleggia questo libro");
-                Console.Write("dal: ");
-                string startDate = Console.ReadLine();
-                Console.Write("al: ");
-                string endDate = Console.ReadLine();
+                Console.Write("fino al (dd/mm/yyyy): ");
+                DateTime endDate = Convert.ToDateTime(Console.ReadLine());
 
-                //creazione prestito
-                Rental rent = new Rental(book, startDate, endDate, this.idUser, this.userLog.name, this.userLog.surname, this.userLog.email);
-                //aggiunta prestito alla lista dei prestiti
-                this.userLog.rentalUser.Add(rent);
 
-                book.state = true;
+                using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
+                {
+                    try
+                    {
+                        conn.Open();
+                        using (SqlCommand cmd = conn.CreateCommand())
+                        using (SqlTransaction trans = conn.BeginTransaction("RentalCreation"))
+                        {
+                            cmd.Connection = conn;
+                            cmd.Transaction = trans;
+
+                            try
+                            {
+                                cmd.CommandText = "INSERT INTO rentals (book_id, user_id, start_date, end_date, state) VALUES (@book_id, @user_id, @start_date, @end_date, 1)";
+                                cmd.Parameters.Add(new SqlParameter("@book_id", book.id));
+                                cmd.Parameters.Add(new SqlParameter("@user_id", this.userLog.Id));
+                                cmd.Parameters.Add(new SqlParameter("@start_date", DateTime.Now));
+                                cmd.Parameters.Add(new SqlParameter("@end_date", endDate));
+                                cmd.ExecuteNonQuery();
+
+                                cmd.CommandText = "UPDATE books SET state=1 WHERE id=@idBook";
+                                cmd.Parameters.Add(new SqlParameter("@idBook", book.id));
+                                cmd.ExecuteNonQuery();
+
+                                trans.Commit();
+
+                            }
+                            catch (Exception ex)
+                            {
+                                trans.Rollback();
+                            }
+                        }
+                        conn.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.ToString());
+                    }
+                }
+
                 Console.Clear();
                 Console.WriteLine("Operazione eseguita con successo!");
                 Console.WriteLine($"Hai noleggiato {book.title} di {book.author}");
@@ -499,15 +534,37 @@ namespace csharp_biblioteca
             Console.WriteLine($" {book.title}");
             Console.WriteLine("------------------------------\n");
 
-            for (int i = 0; i < this.userLog.rentalUser.Count; i++)
+
+            //controllo se il libro è stato noleggiato dal cliente
+            using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
             {
-                if (this.userLog.rentalUser[i].document.id == book.id)
+                try
                 {
-                    bookPresent = true;
-                    keyRent = i;
-                    break;
+                    conn.Open();
+
+                    string query = "SELECT * FROM rentals WHERE user_id=@user_id AND book_id=@book_id AND state=1";
+
+                    using (SqlCommand cmd = new SqlCommand(query, conn))
+                    {
+                        cmd.Parameters.Add(new SqlParameter("@user_id", this.userLog.Id));
+                        cmd.Parameters.Add(new SqlParameter("@book_id", book.id));
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                bookPresent = true;
+                            }
+                        }
+                    }
+                    conn.Close();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
                 }
             }
+
 
             if (bookPresent)
             {
@@ -520,8 +577,27 @@ namespace csharp_biblioteca
                 switch (choice)
                 {
                     case 1:
-                        this.userLog.rentalUser.RemoveAt(keyRent);
-                        book.state = false;
+                        using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
+                        {
+                            try
+                            {
+                                conn.Open();
+
+                                string query = "UPDATE rentals SET state=0 WHERE user_id=@user_id AND book_id=@book_id";
+
+                                SqlCommand cmd = new SqlCommand(query, conn);
+                                cmd.Parameters.Add(new SqlParameter("@user_id", this.userLog.Id));
+                                cmd.Parameters.Add(new SqlParameter("@book_id", book.id));
+
+                                cmd.ExecuteNonQuery();
+
+                                conn.Close();
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine(ex.ToString());
+                            }
+                        }
                         Console.Clear();
                         Console.WriteLine($"{book.title} restituito con successo!");
                         Console.WriteLine("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~\n");
@@ -555,7 +631,7 @@ namespace csharp_biblioteca
                         break;
                     case 3:
                         this.isLog = false;
-                        this.idUser = -1;
+                        this.userLog = null;
                         this.Home(" MENÙ");
                         break;
                     case 4:
@@ -568,15 +644,92 @@ namespace csharp_biblioteca
 
 
         //---------------------------------------- RENTAL ----------------------------------------------------
-        private void RentalList(int idUser)
+        private void RentalList()
         {
             Console.Clear();
 
             Console.WriteLine(" I TUOI NOLEGGI");
             Console.WriteLine("------------------------------\n");
 
+            List<Rental> rentals = new List<Rental>();
 
-            if(this.userLog.rentalUser.Count < 1)
+            using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
+            {
+                try
+                {
+                    conn.Open();
+                    using (SqlCommand cmd = conn.CreateCommand())
+                    using (SqlTransaction trans = conn.BeginTransaction("UserCreation"))
+                    {
+                        cmd.Connection = conn;
+                        cmd.Transaction = trans;
+
+                        cmd.CommandText = "SELECT * FROM rentals WHERE user_id=@user_id AND state=1";
+                        cmd.Parameters.Add(new SqlParameter("@user_id", this.userLog.Id));
+                        cmd.ExecuteNonQuery();
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                int book_id = reader.GetInt32(1);
+                                DateTime startDate = reader.GetDateTime(3);
+                                DateTime endDate = reader.GetDateTime(4);
+
+                                string title = "";
+                                string author = "";
+
+                                cmd.CommandText = "SELECT title, author FROM book WHERE book_id=@book_id";
+                                cmd.Parameters.Add(new SqlParameter("@book_id", book_id));
+                                cmd.ExecuteNonQuery();
+
+                                using (SqlDataReader reader2 = cmd.ExecuteReader())
+                                {
+                                    if (reader2.Read())
+                                    {
+                                        title = reader2.GetString(0);
+                                        author = reader2.GetString(1);
+                                    }
+                                }
+
+                                Rental rental = new Rental(title, author, startDate, endDate, this.userLog.Id);
+                            }
+                        }
+                    }
+                    conn.Close();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+            }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            if (rentals.Count < 1)
             {
                 Console.WriteLine("Non c'è nessun noleggio in corso\n\n");
                 Console.WriteLine("Premi qualsiasi tasto per tornare indietro...");
@@ -586,42 +739,24 @@ namespace csharp_biblioteca
             }
             else
             {
-                string stamp = this.userLog.rentalUser.Count > 1 ?
-                    $"Ci sono {this.userLog.rentalUser.Count} noleggi in corso:" :
-                    $"C'è {this.userLog.rentalUser.Count} noleggio in corso:\n";
+                string stamp = rentals.Count > 1 ?
+                    $"Ci sono {rentals.Count} noleggi in corso:" :
+                    $"C'è {rentals.Count} noleggio in corso:\n";
 
                 Console.WriteLine(stamp);
 
-                for (int i = 0; i < this.userLog.rentalUser.Count; i++)
+                for (int i = 0; i < rentals.Count; i++)
                 {
                     Console.Write($"{i + 1}. ");
-                    Console.WriteLine($"{this.userLog.rentalUser[i].document.title} ");
-                    Console.Write($"   noleggio dal {this.userLog.rentalUser[i].startDate} ");
-                    Console.Write($"al {this.userLog.rentalUser[i].endDate}\n\n");
+                    Console.WriteLine($"{rentals[i].title} ");
+                    Console.Write($"   noleggio dal {rentals[i].startDate} ");
+                    Console.Write($"al {rentals[i].endDate}\n\n");
                 }
 
-                Console.WriteLine("Seleziona un articolo");
-
-                int choice;
-
-                choice = this.loopChoice(this.userLog.rentalUser.Count);
-
-                if (this.userLog.rentalUser[choice - 1].document.type == "book")
-                {
-                    foreach (Book book in books)
-                    {
-                        if (book.id == this.userLog.rentalUser[choice - 1].document.id)
-                        {
-                            Console.Clear();
-                            this.BookInfo(book);
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    
-                }
+                Console.WriteLine("\nPremi qualsiasi tasto per tornare indietro...");
+                Console.ReadKey();
+                Console.Clear();
+                this.Logged();
             }
         }
 
@@ -645,7 +780,51 @@ namespace csharp_biblioteca
             Console.WriteLine(" LISTA LIBRI DISPONIBILI");
             Console.WriteLine("------------------------------\n");
 
-            foreach(Book book in books)
+            Book bookDB;
+
+            List<Book> books = new List<Book>();
+
+            using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
+            {
+                try
+                {
+                    conn.Open();
+
+                    string query = "SELECT * FROM books WHERE state=0";
+
+                    using (SqlCommand cmd = new SqlCommand(query, conn))
+                    {
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            while(reader.Read())
+                            {
+
+                                int id = reader.GetInt32(0);
+                                string isbn = reader.GetString(1);
+                                string title = reader.GetString(2);
+                                string author = reader.GetString(3);
+                                int year = reader.GetInt32(4);
+                                int numberPages = reader.GetInt32(5);
+                                string genre = reader.GetString(6);
+                                string shelf = reader.GetString(7);
+                                bool state = reader.GetBoolean(8);
+
+                                bookDB = new Book(id, isbn, "book", title, year, genre, state, shelf, author, numberPages);
+
+                                books.Add(bookDB);
+                            }
+                        }
+                    }
+                    conn.Close();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+            }
+
+            foreach (Book book in books)
             {
                 if (!book.state)
                 {
