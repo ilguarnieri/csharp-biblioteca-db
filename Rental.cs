@@ -8,19 +8,21 @@ namespace csharp_biblioteca
 {
     internal class Rental
     {
+        public int IdBook { get; private set; }
+        public int IdUser { get; private set; }
         public string title;
         public string author;
-        public DateTime startDate;
-        public DateTime endDate;
-        public int idUser;
+        public string startDate;
+        public string endDate;
 
-        public Rental(string title, string author, DateTime startDate, DateTime endDate, int idUser)
+        public Rental(int idBook, string title, string author, string startDate, string endDate, int idUser)
         {
+            this.IdBook = idBook;
             this.title = title;
             this.author = author;
             this.startDate = startDate;
             this.endDate = endDate;
-            this.idUser = idUser;
+            this.IdUser = idUser;
         }
     }
 }

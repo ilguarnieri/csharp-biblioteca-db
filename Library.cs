@@ -463,7 +463,25 @@ namespace csharp_biblioteca
 
                 Console.WriteLine("Noleggia questo libro");
                 Console.Write("fino al (dd/mm/yyyy): ");
-                DateTime endDate = Convert.ToDateTime(Console.ReadLine());
+
+                bool dateCorrect = false;
+                DateTime endDate = new DateTime();
+
+                do
+                {
+                    try
+                    {
+                        endDate = Convert.ToDateTime(Console.ReadLine());
+
+                        dateCorrect = true;
+
+                    } catch (Exception e)
+                    {
+                        Console.WriteLine("\nInserisci una data nel formato dd/mm/yyy");
+                        dateCorrect = false;
+                    }
+
+                } while (!dateCorrect);
 
 
                 using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
@@ -584,12 +602,16 @@ namespace csharp_biblioteca
                                 conn.Open();
 
                                 string query = "UPDATE rentals SET state=0 WHERE user_id=@user_id AND book_id=@book_id";
+                                string query2 = "UPDATE books SET state=0 WHERE id=@book_id";
 
                                 SqlCommand cmd = new SqlCommand(query, conn);
                                 cmd.Parameters.Add(new SqlParameter("@user_id", this.userLog.Id));
                                 cmd.Parameters.Add(new SqlParameter("@book_id", book.id));
-
                                 cmd.ExecuteNonQuery();
+
+                                SqlCommand cmd2 = new SqlCommand(query2, conn);
+                                cmd2.Parameters.Add(new SqlParameter("@book_id", book.id));
+                                cmd2.ExecuteNonQuery();
 
                                 conn.Close();
                             }
@@ -652,6 +674,7 @@ namespace csharp_biblioteca
             Console.WriteLine("------------------------------\n");
 
             List<Rental> rentals = new List<Rental>();
+            int choice;
 
             using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
             {
@@ -659,12 +682,12 @@ namespace csharp_biblioteca
                 {
                     conn.Open();
                     using (SqlCommand cmd = conn.CreateCommand())
-                    using (SqlTransaction trans = conn.BeginTransaction("UserCreation"))
+                    using (SqlTransaction trans = conn.BeginTransaction("RentalList"))
                     {
                         cmd.Connection = conn;
                         cmd.Transaction = trans;
 
-                        cmd.CommandText = "SELECT * FROM rentals WHERE user_id=@user_id AND state=1";
+                        cmd.CommandText = "SELECT book_id, start_date, end_date, title, author FROM rentals r INNER JOIN books b ON r.book_id = b.id WHERE r.user_id=@user_id AND r.state=1";
                         cmd.Parameters.Add(new SqlParameter("@user_id", this.userLog.Id));
                         cmd.ExecuteNonQuery();
 
@@ -672,27 +695,16 @@ namespace csharp_biblioteca
                         {
                             while (reader.Read())
                             {
-                                int book_id = reader.GetInt32(1);
-                                DateTime startDate = reader.GetDateTime(3);
-                                DateTime endDate = reader.GetDateTime(4);
+                                int book_id = reader.GetInt32(0);
+                                string startDate = reader.GetDateTime(1).ToString("d");
+                                string endDate = reader.GetDateTime(2).ToString("d");
 
-                                string title = "";
-                                string author = "";
+                                string title = reader.GetString(3);
+                                string author = reader.GetString(4);
 
-                                cmd.CommandText = "SELECT title, author FROM book WHERE book_id=@book_id";
-                                cmd.Parameters.Add(new SqlParameter("@book_id", book_id));
-                                cmd.ExecuteNonQuery();
+                                Rental rental = new Rental(book_id, title, author, startDate, endDate, this.userLog.Id);
 
-                                using (SqlDataReader reader2 = cmd.ExecuteReader())
-                                {
-                                    if (reader2.Read())
-                                    {
-                                        title = reader2.GetString(0);
-                                        author = reader2.GetString(1);
-                                    }
-                                }
-
-                                Rental rental = new Rental(title, author, startDate, endDate, this.userLog.Id);
+                                rentals.Add(rental);
                             }
                         }
                     }
@@ -703,30 +715,6 @@ namespace csharp_biblioteca
                     Console.WriteLine(ex.ToString());
                 }
             }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
             if (rentals.Count < 1)
@@ -753,10 +741,56 @@ namespace csharp_biblioteca
                     Console.Write($"al {rentals[i].endDate}\n\n");
                 }
 
-                Console.WriteLine("\nPremi qualsiasi tasto per tornare indietro...");
-                Console.ReadKey();
+
+                Console.WriteLine("\nSeleziona un libro");
+
+                choice = this.loopChoice(rentals.Count);
                 Console.Clear();
-                this.Logged();
+
+                int idBook = rentals[choice - 1].IdBook;
+
+
+                using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
+                {
+                    try
+                    {
+                        conn.Open();
+
+                        string query = "SELECT * FROM books WHERE id=@id";
+
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.Add(new SqlParameter("@id", idBook));
+
+                            using (SqlDataReader reader = cmd.ExecuteReader())
+                            {
+                                if (reader.Read())
+                                {
+                                    int id = reader.GetInt32(0);
+                                    string isbn = reader.GetString(1);
+                                    string title = reader.GetString(2);
+                                    string author = reader.GetString(3);
+                                    int year = reader.GetInt32(4);
+                                    int numberPages = reader.GetInt32(5);
+                                    string genre = reader.GetString(6);
+                                    string shelf = reader.GetString(7);
+                                    bool state = reader.GetBoolean(8);
+
+                                    this.bookSelect = new Book(id, isbn, "book", title, year, genre, state, shelf, author, numberPages);
+
+                                }
+                            }
+                        }
+                        conn.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.ToString());
+                    }
+                }
+
+                Console.Clear();
+                this.BookInfo(this.bookSelect);
             }
         }
 
@@ -781,7 +815,8 @@ namespace csharp_biblioteca
             Console.WriteLine("------------------------------\n");
 
             Book bookDB;
-
+            int choice;
+            int index = 0;
             List<Book> books = new List<Book>();
 
             using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
@@ -826,17 +861,19 @@ namespace csharp_biblioteca
 
             foreach (Book book in books)
             {
+
                 if (!book.state)
                 {
-                    Console.WriteLine($"- {book.title} di {book.author}, {book.year}, {book.id}");
+                    Console.WriteLine($"{++index}- {book.title} di {book.author}, {book.year}, {book.id}");
                 }
             }
 
 
-            Console.WriteLine("\nPremi qualsiasi tasto per tornare indietro...");
-            Console.ReadKey();
+            Console.WriteLine("\nSeleziona un libro");
+
+            choice = this.loopChoice(books.Count);
             Console.Clear();
-            this.Logged();
+            this.BookInfo(books[choice - 1]);
         }
 
 
