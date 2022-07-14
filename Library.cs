@@ -345,20 +345,54 @@ namespace csharp_biblioteca
             Console.Write($"Inserisci titolo: ");
             string title = Console.ReadLine();
 
+
             bool foundBook = false;
 
-            foreach (Book book in books)
+            using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
             {
-                if (book.title == title)
+                try
                 {
-                    Console.Clear();
-                    foundBook = true;
-                    this.BookInfo(book);
-                    break;
+                    conn.Open();
+
+                    string query = "SELECT * FROM books WHERE title=@isbn";
+
+                    using (SqlCommand cmd = new SqlCommand(query, conn))
+                    {
+                        cmd.Parameters.Add(new SqlParameter("@isbn", title));
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                foundBook = true;
+
+                                string isbn = reader.GetString(1);
+                                title = reader.GetString(2);
+                                string author = reader.GetString(3);
+                                int year = reader.GetInt32(4);
+                                int numberPages = reader.GetInt32(5);
+                                string genre = reader.GetString(6);
+                                string shelf = reader.GetString(7);
+                                bool state = reader.GetBoolean(8);
+
+                                this.bookSearch = new Book(isbn, "book", title, year, genre, state, shelf, author, numberPages);
+
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
                 }
             }
 
-            if (!foundBook)
+            if (foundBook)
+            {
+                Console.Clear();
+                this.BookInfo(this.bookSearch);
+            }
+            else
             {
                 Console.Clear();
                 Console.WriteLine("*- LIBRO NON TROVATO -*\n");
