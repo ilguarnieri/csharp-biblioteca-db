@@ -3,26 +3,27 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Data.SqlClient;
 
 namespace csharp_biblioteca
 {
     internal class Library
     {
-        public List<User> users;
         public List<Book> books;
-        public List<Dvd> dvds;
         public List<Rental> rentals;
 
         private bool isLog = false;
-        private int idUser = -1;
+        private int idUser;
         private User userLog;
+        private Book bookSearch;
+
+        //db
+        string stringaDiConnessione = "Data Source=localhost;Initial Catalog=db-biblioteca;Integrated Security=True";
 
         //costruttore
-        public Library(List<User> users, List<Book> books, List<Dvd> dvds, List<Rental>rentals)
+        public Library(List<Book> books, List<Rental>rentals)
         {
-            this.users = users;
             this.books = books;
-            this.dvds = dvds;
             this.rentals = rentals;
         }
 
@@ -76,8 +77,42 @@ namespace csharp_biblioteca
             Console.Write("TELEFONO: ");
             string cellNumber = Console.ReadLine();
 
-            User user = new User(name, surname, email, password, cellNumber, true);
-            this.users.Add(user);
+
+            using(SqlConnection conn = new SqlConnection(stringaDiConnessione))
+            {
+                try
+                {
+                    conn.Open();
+                    using (SqlCommand cmd = conn.CreateCommand())
+                    using (SqlTransaction trans = conn.BeginTransaction("UserCreation"))
+                    {
+                        cmd.Connection = conn;
+                        cmd.Transaction = trans;
+
+                        try
+                        {
+                            cmd.CommandText = "INSERT INTO users (name, surname, email, password, cellNumber, register) VALUES (@name, @surname, @email, @password, @cellNumber, 1)";
+                            cmd.Parameters.Add(new SqlParameter("@name", name));
+                            cmd.Parameters.Add(new SqlParameter("@surname", surname));
+                            cmd.Parameters.Add(new SqlParameter("@email", email));
+                            cmd.Parameters.Add(new SqlParameter("@password", password));
+                            cmd.Parameters.Add(new SqlParameter("@cellNumber", cellNumber));
+
+                            cmd.ExecuteNonQuery();
+                            trans.Commit();
+
+                        }
+                        catch (Exception ex)
+                        {
+                            trans.Rollback();
+                        }
+                    }
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+            }
 
             Console.Clear();
             this.Home(" REGISTRAZIONE RIUSCITA");
@@ -96,22 +131,59 @@ namespace csharp_biblioteca
             Console.Write("PASSWORD: ");
             string password = Console.ReadLine();
 
-            for (int i = 0; i < this.users.Count; i++)
+
+            using (SqlConnection conn = new SqlConnection(stringaDiConnessione))
             {
-                if (this.users[i].email == email && this.users[i].password == password)
+                try
                 {
-                    this.isLog = true;
-                    this.idUser = i;
-                    this.userLog = this.users[i];
-                    Console.Clear();
-                    this.Logged();
-                    break;
+                    conn.Open();
+
+                    string query = "SELECT * FROM users WHERE email=@email AND password=@password";
+
+                    using (SqlCommand cmd = new SqlCommand(query, conn))
+                    {
+                        cmd.Parameters.Add(new SqlParameter("@email", email));
+                        cmd.Parameters.Add(new SqlParameter("@password", password));
+
+                        using (SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            try
+                            {
+                                if (reader.Read())
+                                {
+                                    this.isLog = true;
+
+                                    this.idUser = reader.GetInt32(0);
+                                    string name = reader.GetString(1);
+                                    string surname = reader.GetString(2);
+                                    
+                                    string cellNumber = reader.GetString(5);
+                                    bool register = reader.GetBoolean(6);
+
+                                    this.userLog = new User(name, surname, email, password, cellNumber, register);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine(ex.ToString());                                
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
                 }
             }
 
-            if (!this.isLog)
+            if (this.isLog)
             {
-                this.Home(" INSERITI DATI NON CORRETTI");
+                Console.Clear();
+                this.Logged();                
+            }
+            else
+            {
+                this.Home("INSERITI DATI NON CORRETTI");
             }
         }
 
@@ -123,16 +195,14 @@ namespace csharp_biblioteca
             Console.WriteLine("------------------------------\n");
 
             Console.WriteLine("1. Cerca un libro");
-            Console.WriteLine("2. Cerca un DVD");
-            Console.WriteLine("3. Libri disponibili");
-            Console.WriteLine("4. Dvd disponibili");
-            Console.WriteLine("5. I tuoi noleggi");
-            Console.WriteLine("6. Logout");
-            Console.WriteLine("7. Exit\n");
+            Console.WriteLine("2. Libri disponibili");
+            Console.WriteLine("3. I tuoi noleggi");
+            Console.WriteLine("4. Logout");
+            Console.WriteLine("5. Exit\n");
 
             int choice;
 
-            choice = this.loopChoice(7);
+            choice = this.loopChoice(5);
 
 
             switch (choice)
@@ -142,24 +212,17 @@ namespace csharp_biblioteca
                     this.SearchBook();
                     break;
                 case 2:
-                    Console.Clear();
-                    this.SearchDvd();
-                    break;
-                case 3:
                     this.allBooks();
                     break;
-                case 4:
-                    this.allDvd();
-                    break;
-                case 5:
+                case 3:
                     this.RentalList(this.idUser);
                     break;
-                case 6:
+                case 4:
                     this.isLog = false;
                     this.idUser = -1;
                     this.Home(" MENÙ");
                     break;
-                case 7:
+                case 5:
                     this.Exit();
                     break;
             }
@@ -218,23 +281,57 @@ namespace csharp_biblioteca
 
             bool foundBook = false;
 
-            foreach (Book book in books)
+            using(SqlConnection conn = new SqlConnection(stringaDiConnessione))
             {
-                if (book.id == isbn)
+                try
                 {
-                    Console.Clear();
-                    foundBook = true;
-                    this.BookInfo(book);
-                    break;
+                    conn.Open();
+
+                    string query = "SELECT * FROM books WHERE isbn=@isbn";
+
+                    using(SqlCommand cmd = new SqlCommand(query, conn))
+                    {
+                        cmd.Parameters.Add(new SqlParameter("@isbn", isbn));
+
+                        using(SqlDataReader reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                foundBook = true;
+
+                                isbn = reader.GetString(1);
+                                string title = reader.GetString(2);
+                                string author = reader.GetString(3);
+                                int year = reader.GetInt32(4);
+                                int numberPages = reader.GetInt32(5);
+                                string genre = reader.GetString(6);
+                                string shelf = reader.GetString(7);
+                                bool state = reader.GetBoolean(8);
+
+                                this.bookSearch = new Book(isbn, "book", title, year, genre, state, shelf, author, numberPages);
+
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
                 }
             }
 
-            if (!foundBook)
+            if (foundBook)
+            {
+                Console.Clear();
+                this.BookInfo(this.bookSearch);
+            }
+            else
             {
                 Console.Clear();
                 Console.WriteLine("*- LIBRO NON TROVATO -*\n");
                 this.SearchBook();
             }
+
         }
 
 
@@ -436,278 +533,6 @@ namespace csharp_biblioteca
 
 
 
-
-        //---------------------------------------- DVD ----------------------------------------------------
-        private void SearchDvd()
-        {
-            Console.WriteLine(" RICERCA DVD");
-            Console.WriteLine("------------------------------\n");
-
-            Console.WriteLine("1. Cerca Seriale");
-            Console.WriteLine("2. Cerca titolo");
-            Console.WriteLine("3. Torna indietro");
-            Console.WriteLine("4. Logout");
-            Console.WriteLine("5. Exit\n");
-
-            int choice;
-
-            choice = this.loopChoice(5);
-
-            switch (choice)
-            {
-                case 1:
-                    this.SearchDvdCode();
-                    break;
-                case 2:
-                    this.SearchDvdTitle();
-                    break;
-                case 3:
-                    Console.Clear();
-                    this.Logged();
-                    break;
-                case 4:
-                    this.isLog = false;
-                    this.idUser = -1;
-                    this.Home(" MENÙ");
-                    break;
-                case 5:
-                    this.Exit();
-                    break;
-            }
-        }
-
-
-
-        private void SearchDvdCode()
-        {
-            Console.Clear();
-            Console.WriteLine(" RICERCA DVD");
-            Console.WriteLine("------------------------------\n");
-
-            Console.Write($"Inserisci Seriale: ");
-            string sn = Console.ReadLine();
-
-            bool foundDvd = false;
-
-            foreach (Dvd dvd in dvds)
-            {
-                if (dvd.id == sn)
-                {
-                    Console.Clear();
-                    foundDvd = true;
-                    this.DvdInfo(dvd);
-                    break;
-                }
-            }
-
-            if (!foundDvd)
-            {
-                Console.Clear();
-                Console.WriteLine("*- DVD NON TROVATO -*\n");
-                this.SearchBook();
-            }
-        }
-
-
-
-        private void SearchDvdTitle()
-        {
-            Console.Clear();
-            Console.WriteLine(" RICERCA DVD");
-            Console.WriteLine("------------------------------\n");
-
-            Console.Write($"Inserisci titolo: ");
-            string title = Console.ReadLine();
-
-            bool foundDvd = false;
-
-            foreach (Dvd dvd in dvds)
-            {
-                if (dvd.title == title)
-                {
-                    Console.Clear();
-                    foundDvd = true;
-                    this.DvdInfo(dvd);
-                    break;
-                }
-            }
-
-            if (!foundDvd)
-            {
-                Console.Clear();
-                Console.WriteLine("*- DVD NON TROVATO -*\n");
-                this.SearchBook();
-            }
-        }
-
-
-
-        private void DvdInfo(Dvd dvd)
-        {
-            Console.WriteLine($" {dvd.title}");
-            Console.WriteLine("------------------------------\n");
-
-            Console.WriteLine("1. Informazioni");
-            Console.WriteLine("2. Noleggia");
-            Console.WriteLine("3. Restituisci");
-            Console.WriteLine("4. Menù principale");
-            Console.WriteLine("5. Logout");
-            Console.WriteLine("6. Exit\n");
-
-            int choice;
-
-            choice = this.loopChoice(6);
-
-            switch (choice)
-            {
-                case 1:
-                    Console.Clear();
-                    dvd.stampInfo();
-                    Console.WriteLine("\nPremi qualsiasi tasto per tornare indietro...");
-                    Console.ReadKey();
-                    Console.Clear();
-                    this.DvdInfo(dvd);
-                    break;
-                case 2:
-                    this.RentalDvd(dvd);
-                    break;
-                case 3:
-                    this.ReturnDvd(dvd);
-                    break;
-                case 4:
-                    Console.Clear();
-                    this.Logged();
-                    break;
-                case 5:
-                    this.isLog = false;
-                    this.idUser = -1;
-                    this.Home(" MENÙ");
-                    break;
-                case 6:
-                    this.Exit();
-                    break;
-            }
-        }
-
-
-
-        private void RentalDvd(Dvd dvd)
-        {
-            Console.Clear();
-            if (!dvd.state)
-            {
-                Console.WriteLine($" {dvd.title}");
-                Console.WriteLine("------------------------------\n");
-
-                Console.WriteLine("Noleggia questo dvd");
-                Console.Write("dal: ");
-                string startDate = Console.ReadLine();
-                Console.Write("al: ");
-                string endDate = Console.ReadLine();
-
-                //creazione prestito
-                Rental rent = new Rental(dvd, startDate, endDate, this.idUser, this.userLog.name, this.userLog.surname, this.userLog.email);
-                //aggiunta prestito alla lista dei prestiti
-                this.userLog.rentalUser.Add(rent);
-
-                dvd.state = true;
-                Console.Clear();
-                Console.WriteLine("Operazione eseguita con successo!");
-                Console.WriteLine($"Hai noleggiato {dvd.title} di {dvd.author}");
-                Console.WriteLine($"Ricordati di restituirlo entro il {endDate}");
-                Console.WriteLine("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~\n");
-                this.Logged();
-            }
-            else
-            {
-                Console.Clear();
-                Console.WriteLine("Mi dispiace il dvd non è disponibile.\n");
-                this.DvdInfo(dvd);
-            }
-        }
-
-
-
-        private void ReturnDvd(Dvd dvd)
-        {
-            Console.Clear();
-
-            int choice;
-            bool dvdPresent = false;
-            int keyRent = -1;
-
-            Console.WriteLine($" {dvd.title}");
-            Console.WriteLine("------------------------------\n");
-
-            for (int i = 0; i < this.userLog.rentalUser.Count; i++)
-            {
-                if (this.userLog.rentalUser[i].document.id == dvd.id)
-                {
-                    dvdPresent = true;
-                    keyRent = i;
-                    break;
-                }
-            }
-
-            if (dvdPresent)
-            {
-                Console.WriteLine("Vuoi restituire questo dvd?");
-                Console.WriteLine("1. SI");
-                Console.WriteLine("2. NO\n");
-
-                choice = this.loopChoice(2);
-
-                switch (choice)
-                {
-                    case 1:
-                        this.userLog.rentalUser.RemoveAt(keyRent);
-                        dvd.state = false;
-                        Console.Clear();
-                        Console.WriteLine($"{dvd.title} restituito con successo!");
-                        Console.WriteLine("~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~\n");
-                        this.Logged();
-                        break;
-                    case 2:
-                        Console.Clear();
-                        this.DvdInfo(dvd);
-                        break;
-                }
-            }
-            else
-            {
-                Console.WriteLine("Non hai noleggiato questo dvd.\n");
-                Console.WriteLine("1. Torna alle info");
-                Console.WriteLine("2. Menù principale");
-                Console.WriteLine("3. Logout");
-                Console.WriteLine("4. Exit\n");
-
-                choice = this.loopChoice(4);
-
-                switch (choice)
-                {
-                    case 1:
-                        Console.Clear();
-                        this.DvdInfo(dvd);
-                        break;
-                    case 2:
-                        Console.Clear();
-                        this.Logged();
-                        break;
-                    case 3:
-                        this.isLog = false;
-                        this.idUser = -1;
-                        this.Home(" MENÙ");
-                        break;
-                    case 4:
-                        this.Exit();
-                        break;
-                }
-            }
-        }
-
-
-
-
         //---------------------------------------- RENTAL ----------------------------------------------------
         private void RentalList(int idUser)
         {
@@ -761,15 +586,7 @@ namespace csharp_biblioteca
                 }
                 else
                 {
-                    foreach (Dvd dvd in dvds)
-                    {
-                        if (dvd.id == this.userLog.rentalUser[choice - 1].document.id)
-                        {
-                            Console.Clear();
-                            this.DvdInfo(dvd);
-                            break;
-                        }
-                    }
+                    
                 }
             }
         }
@@ -808,29 +625,6 @@ namespace csharp_biblioteca
             Console.Clear();
             this.Logged();
         }
-
-
-
-        public void allDvd()
-        {
-            Console.Clear();
-            Console.WriteLine(" LISTA DVD DISPONIBILI");
-            Console.WriteLine("------------------------------\n");
-
-            foreach (Dvd dvd in dvds)
-            {
-                if (!dvd.state)
-                {
-                    Console.WriteLine($"- {dvd.title} di {dvd.author}, {dvd.year}, {dvd.id}");
-                }
-            }
-
-            Console.WriteLine("\nPremi qualsiasi tasto per tornare indietro...");
-            Console.ReadKey();
-            Console.Clear();
-            this.Logged();
-        }
-
 
 
 

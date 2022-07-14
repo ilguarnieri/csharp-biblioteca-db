@@ -11,14 +11,14 @@ namespace csharp_biblioteca
         public string id;
         public string type;
         public string title;
-        public uint year;
+        public int year;
         public string sector;
         public bool state;
         public string shelf;
         public string author;
 
         //costruttore
-        public Document(string id, string type, string title, uint year, string sector, bool state, string shelf, string author)
+        public Document(string id, string type, string title, int year, string sector, bool state, string shelf, string author)
         {
             this.id = id;
             this.type = type;

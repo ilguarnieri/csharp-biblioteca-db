@@ -23,7 +23,7 @@ namespace csharp_biblioteca
         public int numberPages;
 
         //costruttore
-        public Book(string isbn, string type, string title, uint year, string sector, bool state, string shelf, string author, int numberPages) :
+        public Book(string isbn, string type, string title, int year, string sector, bool state, string shelf, string author, int numberPages) :
             base(isbn, type, title, year, sector, state, shelf, author)
         {
             this.numberPages = numberPages;
